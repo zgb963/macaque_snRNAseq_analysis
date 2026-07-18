@@ -1,0 +1,1072 @@
+---
+title: "Untitled"
+output: html_document
+date: "2025-07-10"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+Processing Wei et al 2022 dataset in R instead of python so can more easily integrate the datasets!
+
+Paper data here: https://www.ebi.ac.uk/biostudies/arrayexpress/studies/E-MTAB-10459
+
+Downloaded the following files into the cluster ~/macaque_snRNAseq/wei_2022_snRNAseq/
+FM_V1_133454_gene.csv
+FM_V1_133454_barcode.csv
+FM_V1_133454.mtx
+
+
+Load libraries (only run chunk if starting new session on cluster OOD). All packages loaded when logging onto RStudio server
+```{r echo=FALSE}
+
+suppressPackageStartupMessages(library(hdf5r)) #use to read in raw count matrix output from cell ranger
+suppressPackageStartupMessages(library(Seurat)) #perform scRNA-seq processing & analysis
+suppressPackageStartupMessages(library(SeuratDisk)) #SeuratDisk package is required to load the reference dataset in signac multiomocs tutorial
+suppressPackageStartupMessages(library(Signac)) #perform snATACseq processing and analysis (also used for multiomocs analaysis)
+suppressPackageStartupMessages(library(patchwork)) #makes plot creation in R faster & more powerful/efficient (works with ggplot2)
+suppressPackageStartupMessages(library(ggplot2)) #create plots
+suppressPackageStartupMessages(library(ggrepel)) #Provides text and label geoms for 'ggplot2' that help to avoid overlapping text labels
+suppressPackageStartupMessages(library(tidyverse)) #used to clean & manipulate data
+suppressPackageStartupMessages(library(parallel))  #used to parallelize R code so don't have to run 1 line at a time. Same with foreach, future, and doParallel
+suppressPackageStartupMessages(library(foreach)) #used to parallelize R code
+suppressPackageStartupMessages(library(future)) #used to parallelize R code
+suppressPackageStartupMessages(library(doParallel)) #used to parallelize R code
+suppressPackageStartupMessages(library(devtools)) #provides R functions that simplify and expedite common tasks in R code
+suppressPackageStartupMessages(library(remotes)) #R installation from remote repositories from GitHub, etc
+suppressPackageStartupMessages(library(GenomicRanges)) #used for storing and manipulating genomic intervals and variables defined along a genome reference/annotation
+suppressPackageStartupMessages(library(rtracklayer)) #used for interacting with multiple genome browsers (currently UCSC built-in) and manipulating annotation tracks in various formats (GFF, BED, bedGraph, BED15, WIG, BigWig and 2bit)
+suppressPackageStartupMessages(library(txdbmaker)) # set of tools for making TxDb objects from genomic annotations from various sources (e.g. UCSC, Ensembl, and GFF files). These tools allow the user to download the genomic locations of transcripts, exons, and CDS, for a given assembly, and to import them in a TxDb object. TxDb objects are implemented in the GenomicFeatures package, together with flexible methods for extracting the desired features in convenient formats.
+suppressPackageStartupMessages(library(BSgenome)) # R package for (BS = biostrings) that's used to load in genomes (FASTA) from model organisms (human, mouse, macaque, etc)
+# suppressPackageStartupMessages(library(BSgenome.Mfascicularis.NCBI.5.0)) # specifically load Macaca fascicularis FASTA from NCBI version 5.0. Similar to how signac tutorial has installed human FASTA
+# suppressPackageStartupMessages(library(BSgenome.Mfascicularis.NCBI.6.0)) # specifically load Macaca fascicularis FASTA from NCBI version 6.0. Similar to how signac tutorial has installed human FASTA
+# suppressPackageStartupMessages(library(SoupX)) #Identify ambient RNA contamination in single cell/nuclear data
+suppressPackageStartupMessages(library(flexmix)) #miQC algorithm has been adapted for use in Seurat through installation of flexmix only
+suppressPackageStartupMessages(library(R.utils)) #dependency for SeuratWrappers package
+suppressPackageStartupMessages(library(SeuratWrappers)) #dependency for miQC to run on seurat objects
+suppressPackageStartupMessages(library(miQC)) #Identify damaged nuclei
+# suppressPackageStartupMessages(library(DropletQC)) #Identifies empty droplets in single cell/nuclear data
+suppressPackageStartupMessages(library(DoubletFinder)) #Identifies doublets in single cell/nuclear data
+suppressPackageStartupMessages(library(Rsamtools)) # Provides FaFile support to try with RegionStats function since can't modify BSgenome object for some reason
+suppressPackageStartupMessages(library(ensembldb)) #Utilities to create and use Ensembl-based annotation databases
+suppressPackageStartupMessages(library(AnnotationHub)) #fetch additional annotation resources from ensembl
+suppressPackageStartupMessages(library(DeSeq2)) #perform differential gene expression in Seurat FindMarkers function
+suppressPackageStartupMessages(library(EnhancedVolcano)) #make fancier volcano plots!
+suppressPackageStartupMessages(library(Matrix)) #matrix manipulation
+
+
+
+
+#use to keep output reproducible!
+set.seed(9364) 
+
+```
+
+
+Run line from future package to run things in parallel (only run chunk if starting new session on cluster OOD)
+```{r}
+# from the future R package, which is used to enable parallel processing
+# 20 parallel R sessions (or workers) for running tasks
+# don't exceed workers by number of cores on OOD (32)
+plan("multisession", workers = 20)
+```
+
+
+
+Need to create matrix object from 3 files above! Did this in GB_rhemac10_3'_snRNAseq_workflow_cellranger_2_21_24.Rmd script! See lines 2346-2419
+Once have matrix object, then can create Seurat object
+Think I need to perform processing steps again like in paper? Or already processed? Will check metadata
+
+From data website says 'For 10X Genomics: Data matrix generate using the Cell Ranger.'
+
+Sample information (we used 10x genomics protocol, NOT patch-seq) https://www.ebi.ac.uk/biostudies/ArrayExpress/studies/E-MTAB-10459/sdrf only shows 2 samples? there are 8 samples
+
+Create counts matrix
+ReadMtx function https://satijalab.org/seurat/reference/readmtx
+```{r}
+# use ReadMtx function from Seurat
+wei_macfas5_snRNAseq <- ReadMtx(mtx = '~/macaque_snRNAseq/wei_2022_snRNAseq/FM_V1_133454.mtx', features = '~/macaque_snRNAseq/wei_2022_snRNAseq/FM_V1_133454_gene.csv', cells = '~/macaque_snRNAseq/wei_2022_snRNAseq/FM_V1_133454_barcode.csv')
+
+# means that FM_V1_133454_gene.csv only has one column but function is expecting 2 columns
+
+
+```
+
+
+Try below
+```{r}
+# use ReadMtx function from Seurat
+wei_macfas5_snRNAseq <- ReadMtx(mtx = '~/macaque_snRNAseq/wei_2022_snRNAseq/FM_V1_133454.mtx', features = '~/macaque_snRNAseq/wei_2022_snRNAseq/FM_V1_133454_gene.csv', cells = '~/macaque_snRNAseq/wei_2022_snRNAseq/FM_V1_133454_barcode.csv', feature.column = 1)
+
+# paper describes full dataset as having 133,455 high-quality cells
+
+# why does matrix file only have 18,297 columns??
+
+# page 4 of paper - In the PVALB subclass (Supplementary Fig. 6c), 2830 genes are significantly altered between the two age groups (FDR < 0.05, out of 18,297 genes, see detailsinMethods
+
+```
+
+
+should have 133,454 cells (i.e., barcodes) and 18,297 genes
+
+ReadMtx() function expects Rows = features (genes) & Columns = cells (barcodes)
+
+error suggests .mtx file is transposed — it's encoding genes as columns and cells as rows, which is not the expected format for Seurat, which expects genes as rows and cells as columns
+
+Read in matrix and transpose
+```{r}
+
+# Read raw Matrix Market file
+wei_mtx <- readMM("~/macaque_snRNAseq/wei_2022_snRNAseq/FM_V1_133454.mtx")
+
+# confirm dimensions of matrix
+# dim function https://www.rdocumentation.org/packages/base/versions/3.6.2/topics/dim (1st number is rows and 2nd number is columns)
+dim(wei_mtx)
+
+# [1] 133454  18297
+
+# there are 133,454 rows/cells in matrix and 18,297 columns/genes
+
+# transpose (switch rows and columns so rows are genes or 18,297 and columns are cell barcodes). Originally when mtx read in, the columns were genes and the rows were cell barodes. Seurat expects columns as cell barcodes and genes as rows!
+wei_mtx <- t(wei_mtx)
+
+# > dim(wei_mtx)
+# [1]  18297 133454
+
+# # Read features and barcodes
+# genes <- read.csv("~/macaque_snRNAseq/wei_2022_snRNAseq/FM_V1_133454_gene.csv", header = FALSE)
+# barcodes <- read.csv("~/macaque_snRNAseq/wei_2022_snRNAseq/FM_V1_133454_barcode.csv", header = FALSE)
+# 
+# # Assign row and column names
+# rownames(wei_mtx) <- genes$V1
+# colnames(wei_mtx) <- barcodes$V1
+# 
+# # view matrix
+# wei_mtx
+
+
+```
+
+
+Create matrix object
+```{r}
+
+# Read features and barcodes - change header = TRUE
+genes <- read.csv("~/macaque_snRNAseq/wei_2022_snRNAseq/FM_V1_133454_gene.csv", header = TRUE)
+barcodes <- read.csv("~/macaque_snRNAseq/wei_2022_snRNAseq/FM_V1_133454_barcode.csv", header = TRUE)
+
+# check --- extra row and column are being added
+# > nrow(genes)
+# [1] 18298
+# > nrow(barcodes)
+# [1] 133455
+
+
+
+# check again (good --- has right numbers now)
+# > nrow(genes)
+# [1] 18297
+# > nrow(barcodes)
+# [1] 133454
+
+
+
+# Assign row and column names
+rownames(wei_mtx) <- genes$V1
+colnames(wei_mtx) <- barcodes$V1
+
+# view matrix
+wei_mtx
+
+
+```
+
+
+
+
+Don't see gene names or cell barcodes....set them
+```{r}
+
+# Assign names (first column assumed to have names)
+rownames(wei_mtx) <- genes[[1]]
+colnames(wei_mtx) <- barcodes[[1]]
+
+```
+
+
+
+check that names are there
+```{r}
+
+rownames(wei_mtx)[1:5]
+colnames(wei_mtx)[1:5]
+
+```
+
+
+see matrix again
+
+```{r}
+
+wei_mtx
+
+```
+
+
+
+Check genes and barcodes objects (has metadata columns)
+```{r}
+# geel_id's column is unique to every gene (but no gene symbols)
+head(genes)
+
+# contains many metadata columns
+head(barcodes)
+
+```
+
+Create Seurat object with wei_mtx to see if metadata is there - is not there...
+```{r}
+
+# Create Seurat object
+wei_macfas5_snRNAseq_so <- CreateSeuratObject(counts = wei_mtx)
+
+```
+
+
+View seurat object - wei_macfas5_snRNAseq_so
+```{r}
+
+wei_macfas5_snRNAseq_so
+
+```
+
+Add metadata from barcodes to seurat object
+
+```{r}
+
+
+# make sure these match!
+head(colnames(wei_macfas5_snRNAseq_so))       # Seurat cell barcodes
+head(barcodes$X)                           # Metadata barcodes
+
+
+
+
+```
+
+
+
+View barcodes object again
+```{r}
+
+head(barcodes)
+
+```
+
+
+Add metadata to wei_macfas5_snRNAseq_so
+```{r}
+
+# Set cell barcodes as rownames so AddMetaData works properly
+rownames(barcodes) <- barcodes$X
+
+# Add metadata to the Seurat object
+wei_macfas5_snRNAseq_so <- AddMetaData(wei_macfas5_snRNAseq_so, metadata = barcodes)
+
+# Check that metadata is added
+head(wei_macfas5_snRNAseq_so@meta.data)
+
+
+
+```
+
+
+
+Remove X column from seurat object metadata
+```{r}
+
+# Drop the "X" column from Seurat metadata
+wei_macfas5_snRNAseq_so@meta.data$X <- NULL
+
+head(wei_macfas5_snRNAseq_so@meta.data)
+
+
+
+```
+
+
+Should also add gene id's to corresponding gene symbol before integration?
+View where genes are stored in seurat object
+```{r}
+
+rownames(wei_macfas5_snRNAseq_so)
+
+```
+
+
+Make sure row names of seurat object and genes object matches
+```{r}
+# > head(rownames(wei_macfas5_snRNAseq_so))
+# [1] "PGBD2"              "ZNF692"             "ZNF672"             "SH3BP5L"            "LYPD8"              "ENSMFAG00000040572"
+# > head(genes$X)
+# [1] "PGBD2"              "ZNF692"             "ZNF672"             "SH3BP5L"            "LYPD8"              "ENSMFAG00000040572"
+
+
+```
+
+
+May not need to because our snRNAseq dataset has gene symbols and id's if none exist, so leave as is
+
+```{r}
+# check gene names of our snRNAseq dataset
+head(rownames(all_combined))
+
+```
+
+
+
+
+7/10/25
+Using wei_macfas5_snRNAseq_so, plot UMAP based on metadata columns
+
+Plot based on class metadata column
+didn;t work, plot by UMAP_1?
+```{r}
+
+DimPlot(wei_macfas5_snRNAseq_so, reduction = "umap", label = TRUE, group.by = "class")
+
+
+```
+
+
+didn't work? maybe because it was processed in python and used leiden clustering and not UMAP clustering in Seurat?
+numbers in UMAP_1 and UMAP_2 columns?
+```{r}
+
+DimPlot(wei_macfas5_snRNAseq_so, reduction = "umap", label = TRUE, group.by = "UMAP_1")
+
+
+```
+
+
+check reductions in object
+```{r}
+
+Reductions(wei_macfas5_snRNAseq_so)
+
+# returns NULL...so may have to process object again using Seurat steps
+
+```
+
+
+7/11/25
+
+1ST, save wei et al seurat object as rds BEFORE running Seurat preprocess steps starting from normalization (don't see in home folder?)
+
+```{r}
+
+saveRDS(wei_macfas5_snRNAseq_so, file = 'wei_macfas5_snRNAseq_so_before_seurat_preprocess_7_11_25.rds')
+
+```
+
+
+
+The original dataset was processed with Cell Ranger and analyzed in SCANPY (Python), including QC and PCA.
+
+You now loaded the deposited (mtx file, barcode.csv, and genes.csv) dataset into R, creating the Seurat object wei_macfas5_snRNAseq_so.
+
+But it doesn’t contain UMAP or PCA reductions yet in R (Reductions(...) = NULL), even though that analysis was done in SCANPY
+
+
+Re-compute UMAP using Seurat so matches our snRNAseq data
+
+START at normalization for reprocessing the data in R so can have pca and UMAP reductions present. See python script to see how many PCs they used and what resolution they used
+
+Python scripts here in github https://github.com/haozhaozhe/FM_V1 if doesn't say then use same resolutions and PCs used for our dataset
+Doesn't say...
+
+```{r}
+# steps run for our dataset (each sample already scaled)
+# all_combined <- all_combined %>%
+#   FindVariableFeatures() %>%
+#   ScaleData() %>%
+#   RunPCA() %>%
+#   FindNeighbors(dims = 1:30) %>%
+#   FindClusters() %>%
+#   RunUMAP(dims = 1:30)
+
+
+# repeat for wei et al seurat object (add normalizedata)
+wei_macfas5_snRNAseq_so <- wei_macfas5_snRNAseq_so %>%
+  NormalizeData() %>%
+  FindVariableFeatures() %>%
+  ScaleData() %>%
+  RunPCA() %>%
+  FindNeighbors(dims = 1:30) %>%
+  FindClusters() %>%
+  RunUMAP(dims = 1:30)
+
+
+```
+
+
+View metadata now (res.0.8 and seurat_clusters columns added)
+```{r}
+
+View(wei_macfas5_snRNAseq_so@meta.data)
+
+
+```
+
+
+
+SAVE seurat object again in wei folder on cluster AFTER seurat steps
+```{r}
+
+saveRDS(wei_macfas5_snRNAseq_so, file = '~/macaque_snRNAseq/wei_2022_snRNAseq/wei_macfas5_snRNAseq_so_after_seurat_preprocess_7_11_25.rds')
+
+```
+
+
+
+Plot UMAP again based on class metadata column (works now!). See figure 1 b in paper (that UMAP was created using scanpy)
+```{r}
+
+DimPlot(wei_macfas5_snRNAseq_so, reduction = "umap", label = TRUE, group.by = "class")
+
+
+```
+
+Plot UMAP based on cell_label metadata column (many labels so hard to see)
+```{r}
+
+DimPlot(wei_macfas5_snRNAseq_so, reduction = "umap", label = TRUE, group.by = "cell_label")
+
+
+```
+
+
+Plot based on UMAP_1? coordinates for each cell?
+```{r}
+
+# DimPlot(wei_macfas5_snRNAseq_so, reduction = "umap", label = TRUE, group.by = "UMAP_1")
+
+
+
+```
+
+
+Make UMAPs for Monkey ID, age, sex, batch
+```{r}
+
+DimPlot(wei_macfas5_snRNAseq_so, reduction = "umap", label = TRUE, group.by = "MonkeyID")
+DimPlot(wei_macfas5_snRNAseq_so, reduction = "umap", label = TRUE, group.by = "age")
+DimPlot(wei_macfas5_snRNAseq_so, reduction = "umap", label = TRUE, group.by = "sex")
+DimPlot(wei_macfas5_snRNAseq_so, reduction = "umap", label = TRUE, group.by = "batch")
+
+```
+
+
+
+INTEGRATION START 
+
+
+
+start integration with this function (Konopka paper snRNAseq processing and annotation section): https://satijalab.org/seurat/reference/selectintegrationfeatures
+
+function not used in integration v5 tutorial?? https://satijalab.org/seurat/articles/integration_introduction
+```{r}
+# find shared genes between our seurat object (all_combined) and wei_ object)
+shared_features <- SelectIntegrationFeatures(
+  object.list = list(all_combined, wei_macfas5_snRNAseq_so),
+  nfeatures = 3000
+)
+
+# identified 2,585 shared genes between two datasets
+
+# shared_features <- SelectIntegrationFeatures(object.list = list(all_combined, wei_macfas5_snRNAseq_so), nfeatures = 3000)
+
+
+```
+
+
+
+View shared features (genes)
+```{r}
+
+shared_features
+
+class(shared_features)
+
+length(shared_features)
+# 2,585 genes in common (should be more??)
+
+```
+
+
+version 5 tutorial still using only one seurat object with same dataset. Need tutorial using different datasets and seurat objects
+
+
+Look at seurat v4 integration tutorial https://satijalab.org/seurat/archive/v4.3/integration_introduction (multiple seurat objects). Most helpful tutorial so far!
+
+
+Next, identify anchors using FindIntegrationAnchors()
+```{r}
+
+# use the shared.features object from above!
+# take screen shots of process
+# getting error due to memory issues I believe (fixed by increasing memory with futures package)
+
+mac_snRNAseq_anchors <- FindIntegrationAnchors(object.list = c(all_combined, wei_macfas5_snRNAseq_so), anchor.features = shared_features)
+
+
+
+# view object
+mac_snRNAseq_anchors
+
+```
+
+
+
+
+7/14/25
+
+Increase memory on OOD and run above, still get error
+
+
+7/16/25
+
+Reckeck available memory after back on OOD
+```{r}
+
+system("free -h")
+
+
+```
+
+
+
+increase to 30 GB memory in script using futures package
+```{r}
+
+options(future.globals.maxSize = 30 * 1024^3) 
+
+```
+
+
+Retry anchors function (took hours but worked!!!!!)
+```{r}
+
+mac_snRNAseq_anchors <- FindIntegrationAnchors(object.list = c(all_combined, wei_macfas5_snRNAseq_so), anchor.features = shared_features)
+
+
+
+# view object
+mac_snRNAseq_anchors
+
+# An AnchorSet object containing 824362 anchors between 2 Seurat objects 
+#  This can be used as input to IntegrateData.
+# Warning message:
+# package 'Matrix' was built under R version 4.4.3 
+
+```
+
+
+
+7/17/25
+
+Save anchors object as RDS!!
+In cluster, make an integration folder under macaque_snRNAseq folder (called wei_2022 integration)
+/home/macaque_snRNAseq
+
+takes a while since it's a large object
+```{r}
+
+saveRDS(mac_snRNAseq_anchors, file = '~/macaque_snRNAseq/wei_2022_integration/mac_snRNAseq_anchors_boulting_wei_7_17_25.rds')
+
+```
+
+What kind of object is mac_snRNAseq_anchors? data frame? seurat object?
+```{r}
+class(mac_snRNAseq_anchors)
+```
+
+
+
+7/21/25
+
+Next, run IntegrateData function on the anchors object
+
+Reference tutorial here https://satijalab.org/seurat/archive/v4.3/integration_introduction
+
+Get error
+```{r}
+
+# function peforms dataset integration using an anchors object
+mac_snRNAseq_combined <- IntegrateData(anchorset = mac_snRNAseq_anchors)
+
+```
+
+IntegrateData() function (from Seurat v4) is trying to access data from scale.data, but in SeuratObject v5, multiple layers are handled differently, and this causes an error when GetAssayData() is called without specifying the correct layer
+
+previously in v4, when you ran functions on a seurat object, normalize data, find variable features, etc, these were stored in slots starting with @ in obj
+
+in v5, those steps are stored as layers. See https://satijalab.org/seurat/articles/seurat5_essential_commands#working-with-layers
+
+ex of layers in our dataset
+```{r}
+# > all_combined
+# An object of class Seurat 
+# 23477 features across 135704 samples within 1 assay 
+# Active assay: RNA (23477 features, 2000 variable features)
+#  55 layers present: counts.1, counts.2, counts.3, counts.4, counts.5, counts.6, counts.7, counts.8, counts.9, counts.10, counts.11, counts.12, counts.13, counts.14, counts.15, counts.16, counts.17, counts.18, data.1, scale.data.1, data.2, scale.data.2, data.3, scale.data.3, data.4, scale.data.4, data.5, scale.data.5, data.6, scale.data.6, data.7, scale.data.7, data.8, scale.data.8, data.9, scale.data.9, data.10, scale.data.10, data.11, scale.data.11, data.12, scale.data.12, data.13, scale.data.13, data.14, scale.data.14, data.15, scale.data.15, data.16, scale.data.16, data.17, scale.data.17, data.18, scale.data.18, scale.data
+#  2 dimensional reductions calculated: pca, umap
+
+
+# counts = raw, unormalized counts for each of the 18 samples
+
+# scale.data = where scaled data is stored for each sample (performed before dimension reduction)
+# Shifts the expression of each gene, so that the mean expression across cells is 0
+# Scales the expression of each gene, so that the variance across cells is 1
+# This step gives equal weight in downstream analyses, so that highly-expressed genes do not dominate
+
+
+# data = where normalized data is stored per sample
+# uses a global-scaling normalization method "LogNormalize" that normalizes the feature expression measurements for each cell by the total expression, multiplies this by a scale factor (10,000 by default), and log-transforms the result. Normalized values are stored in the “RNA” assay (as item of the @assay slot) of the seu object.
+
+```
+
+
+The only way to get above to work is to downgrade to Seurat v4...better to use current version v5
+
+view integrated object
+```{r}
+mac_snRNAseq_combined
+
+```
+
+
+Perform Integrated analysis v4 - SKIP
+
+
+v5 integration tutorial START https://satijalab.org/seurat/articles/integration_introduction
+
+Already ran the following steps on our obj (all_combined) and wei obj (wei_macfas5_snRNAseq_so) separately
+Using same cutoffs in each 
+UMI > 1000
+% mito & % ribo less than < 5
+PCs = 1-30
+Resolution = 0.8
+```{r}
+# run standard anlaysis workflow
+# ifnb <- NormalizeData(ifnb)
+# ifnb <- FindVariableFeatures(ifnb)
+# ifnb <- ScaleData(ifnb)
+# ifnb <- RunPCA(ifnb)
+# ifnb <- FindNeighbors(ifnb, dims = 1:30, reduction = "pca")
+# ifnb <- FindClusters(ifnb, resolution = 2, cluster.name = "unintegrated_clusters")
+# ifnb <- RunUMAP(ifnb, dims = 1:30, reduction = "pca", reduction.name = "umap.unintegrated")
+# DimPlot(ifnb, reduction = "umap.unintegrated", group.by = c("stim", "seurat_clusters"))
+
+
+```
+
+
+
+
+Would I first merge the seurat objects together (Ozkan suggestion) and then run the IntegrateLayers function? NO, not from v4. Use v5 TUTORIAL
+
+Merge seurat objects (refer to lines 1308-1395 in GB_Mmul_10_snRNAseq_cellranger_count_ensembl_5_16_25.Rmd on how I did this for merging 18 sample objects)
+Merge without integration https://satijalab.org/seurat/articles/essential_commands#merge-objects-without-integration
+
+https://satijalab.org/seurat/archive/v4.3/merge
+
+
+Our data (all_combined)
+23,477 features/genes
+135,704 samples/nuclei
+
+Wei dataset (wei_macfas5_snRNAseq_so)
+18,297 features/genes
+133,454 samples/nuclei
+
+Merged object should have: 23477+18297 = 41,774 genes (or will likely be less because there is overlap) & 135704+133454 = 269,158 nuclei
+merged object has 28431 genes (shared between two datasets)
+
+
+Slim down a seurat object during merge https://satijalab.org/seurat/reference/dietseurat
+
+
+Merge 
+```{r}
+# merge.data = TRUE merges raw and normalized counts
+merged_macaque_snRNAseq <- merge(all_combined, y = wei_macfas5_snRNAseq_so, add.cell.ids = c("boulting", "wei"), merge.data = TRUE)
+
+# view (number of genes don't add up and layers don't make sense)
+merged_macaque_snRNAseq
+
+# An object of class Seurat 
+# 28431 features across 269158 samples within 1 assay 
+# Active assay: RNA (28431 features, 2000 variable features)
+#  58 layers present: counts.1.1, counts.10.1, counts.11.1, counts.12.1, counts.13.1, counts.14.1, counts.15.1, counts.16.1, counts.17.1, counts.18.1, counts.2, counts.3.1, counts.4.1, counts.5.1, counts.6.1, counts.7.1, counts.8.1, counts.9.1, counts.2.1, data.1.1, scale.data.1.1, data.2.1, scale.data.2.1, data.3.1, scale.data.3.1, data.4.1, scale.data.4.1, data.5.1, scale.data.5.1, data.6.1, scale.data.6.1, data.7.1, scale.data.7.1, data.8.1, scale.data.8.1, data.9.1, scale.data.9.1, data.10.1, scale.data.10.1, data.11.1, scale.data.11.1, data.12.1, scale.data.12.1, data.13.1, scale.data.13.1, data.14.1, scale.data.14.1, data.15.1, scale.data.15.1, data.16.1, scale.data.16.1, data.17.1, scale.data.17.1, data.18.1, scale.data.18.1, scale.data.1, data.2, scale.data.2
+
+```
+
+During merge, only keep raw counts from each seurat object - will normalize, scale, etc together
+
+seurat docs 5.2.0 - Keep only certain aspects of the Seurat object. Can be useful in functions that utilize merge as it reduces the amount of data in the merge
+
+avoid merging excessive layers
+
+run this? yes, reviewed w/Ozkan to just keep counts layer from both objects and it works!!!!!!
+```{r}
+all_combined_slim <- DietSeurat(all_combined, assays = "RNA", counts = TRUE, data = FALSE, scale.data = FALSE)
+wei_slim <- DietSeurat(wei_macfas5_snRNAseq_so, assays = "RNA", counts = TRUE, data = FALSE, scale.data = FALSE)
+
+merged_macaque_snRNAseq_obj_2 <- merge(all_combined_slim, y = wei_slim,
+                                 add.cell.ids = c("boulting", "wei"),
+                                 merge.data = FALSE)  # Avoid merging "data" layer or scale.data layer
+
+
+```
+
+
+or run with v5 way? SKIP
+```{r}
+
+# Merge two Seurat objects
+# merged_obj <- merge(x = all_combined, y = wei_macfas5_snRNAseq_so)
+
+
+```
+
+
+
+7/23/25
+Join layers for our dataset 1st (referece lines 1793 in GB_Mmul_10_snRNAseq_cellranger_count_ensembl_5_16_25.Rmd)
+there are currently 18 counts (raw-counts) layers, 18 data (normalized counts) layers, and 18 scale.data (scaled counts) layers
+combine sample layers before merge
+
+Seurat v5 assays store data in layers. These layers can store raw, un-normalized counts (layer='counts'), normalized data (layer='data'), or z-scored/variance-stabilized data (layer='scale.data'). https://satijalab.org/seurat/articles/seurat5_integration
+
+JoinLayers function https://satijalab.org/seurat/articles/essential_commands.html
+
+Why function doesn't join scale.data layers https://github.com/satijalab/seurat/issues/9172
+The reason is because of what ScaleData is doing and why you run it (creating scaled expression across all cells). It would not be valid to combine scaled data from multiple samples into a new matrix just by combining them because they need to be scaled together.
+```{r}
+# join
+all_combined_join_layers <- JoinLayers(all_combined)
+
+# view object
+all_combined_join_layers
+# joined raw counts and normalized cout layers (and scale.data layer)
+
+```
+
+Re-run merge
+```{r}
+
+merged_obj <- merge(x = all_combined_join_layers, y = wei_macfas5_snRNAseq_so)
+
+```
+
+
+See merged object
+```{r}
+
+ merged_obj
+View(merged_obj@meta.data)
+
+```
+
+
+Re-run so know what cell id's come from which dataset
+```{r}
+# 1st object is boulting and 2nd one is wei
+merged_obj_2 <- merge(x = all_combined_join_layers, y = wei_macfas5_snRNAseq_so, add.cell.ids = c("boulting", "wei"))
+
+```
+
+
+
+View metadata
+```{r}
+
+# adds boulting_ and wei_ prefixes to cell id's!
+View(merged_obj_2@meta.data)
+
+```
+
+
+Start v5 integration https://satijalab.org/seurat/articles/integration_introduction#perform-integration
+
+We now aim to integrate data from the two conditions, so that cells from the same cell type/subpopulation will cluster together.
+
+We often refer to this procedure as intergration/alignment. When aligning two genome sequences together, identification of shared/homologous regions can help to interpret differences between the sequences as well. Similarly for scRNA-seq integration, our goal is not to remove biological differences across conditions, but to learn shared cell types/states in an initial step - specifically because that will enable us to compare control stimulated and control profiles for these individual cell types.
+
+The Seurat v5 integration procedure aims to return a single dimensional reduction that captures the shared sources of variance across multiple layers, so that cells in a similar biological state will cluster. The method returns a dimensional reduction (i.e. integrated.cca) which can be used for visualization and unsupervised clustering analysis. For evaluating performance, we can use cell type labels that are pre-loaded in the seurat_annotations metadata column.
+
+```{r}
+
+merged_obj_2 <- IntegrateLayers(object = merged_obj_2, method = CCAIntegration, orig.reduction = "pca", new.reduction = "integrated.cca",
+    verbose = FALSE)
+
+
+```
+
+View merged_obj (doesn't have dimension reductions calculated yet)
+
+```{r}
+
+merged_obj_2
+# counts.1 i believe is our dataset (object listed 1st in the merge)
+# counts.2 is wei
+# counts.1 boulting (all 18 samples)
+# counts.2 wei
+# scale.data.1 boulting (othes - 1.1, 2.1, 3.1, etc are from 18 samples in our object)
+# scale.data.2 wei
+
+```
+
+
+
+
+Think I need to re-run analysis without integration on the merged object 1st, then perform integration
+caused r studio to crash :( started a new job id 794545)
+```{r}
+
+# run standard anlaysis workflow
+# merged_obj_2 <- NormalizeData(merged_obj_2)
+# merged_obj_2 <- FindVariableFeatures(merged_obj_2)
+# merged_obj_2 <- ScaleData(merged_obj_2)
+# merged_obj_2 <- RunPCA(merged_obj_2)
+# merged_obj_2 <- FindNeighbors(merged_obj_2, dims = 1:30, reduction = "pca")
+# merged_obj_2 <- FindClusters(merged_obj_2, resolution = 0.8, cluster.name = "unintegrated_clusters")
+# merged_obj_2 <- RunUMAP(merged_obj_2, dims = 1:30, reduction = "pca", reduction.name = "umap.unintegrated")
+# DimPlot(merged_obj_2, reduction = "umap.unintegrated", group.by = c("boulting", "seurat_clusters"))
+
+
+```
+
+
+
+RunUMAP took a while because was only running on one thread according to output log
+Just because queue memory requests are specfied on OOD, dosn't mean that script is using it - need to specify directly in script
+```{r}
+
+merged_macaque_snRNAseq_obj_2 <- NormalizeData(merged_macaque_snRNAseq_obj_2)
+merged_macaque_snRNAseq_obj_2 <- FindVariableFeatures(merged_macaque_snRNAseq_obj_2)
+merged_macaque_snRNAseq_obj_2 <- ScaleData(merged_macaque_snRNAseq_obj_2)
+merged_macaque_snRNAseq_obj_2 <- RunPCA(merged_macaque_snRNAseq_obj_2)
+merged_macaque_snRNAseq_obj_2 <- FindNeighbors(merged_macaque_snRNAseq_obj_2, dims = 1:30, reduction = "pca")
+merged_macaque_snRNAseq_obj_2 <- FindClusters(merged_macaque_snRNAseq_obj_2, resolution = 0.8, cluster.name = "unintegrated_clusters")
+merged_macaque_snRNAseq_obj_2 <- RunUMAP(merged_macaque_snRNAseq_obj_2, dims = 1:30, reduction = "pca", reduction.name = "umap.unintegrated")
+# DimPlot(merged_macaque_snRNAseq_obj_2, reduction = "umap.unintegrated", group.by = c("boulting", "seurat_clusters"))
+DimPlot(merged_macaque_snRNAseq_obj_2, reduction = "umap.unintegrated", group.by = "seurat_clusters")
+
+```
+
+Made UMAP by class metadata column (scroll left to see)
+NA is boulting dataset
+```{r}
+
+DimPlot(merged_macaque_snRNAseq_obj_2, reduction = "umap.unintegrated", group.by = c("class"))
+
+
+
+```
+
+
+SAVE merged_macaque_snRNAseq_obj_2 as an rds!!! So don't have to re-run above steps!
+
+```{r}
+
+saveRDS(merged_macaque_snRNAseq_obj_2, file = "~/macaque_snRNAseq/wei_2022_integration/merged_macaque_snRNAseq_obj_2_boulting_wei_072325.rds")
+
+```
+
+
+
+7/24/25
+
+View merged seurat object with two datasets
+Use Cols at very top to scroll through 59 columns
+```{r}
+
+View(merged_macaque_snRNAseq_obj_2@meta.data)
+
+```
+
+
+Based on cell id's (boulting_ & wei_) in View(merged_macaque_snRNAseq_obj_2@meta.data) rows, want to make a metadata column called dataset type and name column either...
+Boulting rhemac10 (boulting_)
+Wei macfas5 (wei_)
+
+Can change later
+
+Then make 2 UMAPs with metadata column dataset type and seurat_clusters or unintegrated_clusters
+
+Add metadata columns to merged_macaque_snRNAseq_obj_2
+```{r}
+
+merged_macaque_snRNAseq_obj_2$dataset_type <- ifelse(
+  grepl("^boulting_", colnames(merged_macaque_snRNAseq_obj_2)),
+  "Boulting rhemac10",
+  ifelse(grepl("^wei_", colnames(merged_macaque_snRNAseq_obj_2)),
+         "Wei macfas5",
+         NA)
+)
+
+```
+
+
+Make UMAP
+Screenshot and save as wei_boulting_seuratv5_umap_without_integration_7_24_25.png
+```{r}
+
+DimPlot(merged_macaque_snRNAseq_obj_2, reduction = "umap.unintegrated", group.by = c("dataset_type", "seurat_clusters"))
+# unintegrated clusters - 48 clusters
+
+```
+
+
+Request more memory with future package
+Currently on interactive queue 16 cores x 12 MB (12GB) = ~192GB
+```{r}
+plan("multicore", workers = 10) 
+options(future.globals.maxSize = 100 * 1024^3)  # 100 GB max memory
+
+```
+
+
+
+Perform integration
+We now aim to integrate data from the two conditions, so that cells from the same cell type/subpopulation will cluster together.
+
+We often refer to this procedure as intergration/alignment. When aligning two genome sequences together, identification of shared/homologous regions can help to interpret differences between the sequences as well. Similarly for scRNA-seq integration, our goal is not to remove biological differences across conditions, but to learn shared cell types/states in an initial step - specifically because that will enable us to compare control stimulated and control profiles for these individual cell types.
+
+The Seurat v5 integration procedure aims to return a single dimensional reduction that captures the shared sources of variance across multiple layers, so that cells in a similar biological state will cluster. The method returns a dimensional reduction (i.e. integrated.cca) which can be used for visualization and unsupervised clustering analysis. For evaluating performance, we can use cell type labels that are pre-loaded in the seurat_annotations metadata column.
+
+
+```{r}
+# integrate layers took a  few hours (done running)
+merged_macaque_snRNAseq_obj_2 <- IntegrateLayers(object = merged_macaque_snRNAseq_obj_2, method = CCAIntegration, orig.reduction = "pca", new.reduction = "integrated.cca",
+    verbose = FALSE)
+
+# re-join layers after integration (done running)
+merged_macaque_snRNAseq_obj_2[["RNA"]] <- JoinLayers(merged_macaque_snRNAseq_obj_2[["RNA"]])
+
+# running (done running)
+merged_macaque_snRNAseq_obj_2 <- FindNeighbors(merged_macaque_snRNAseq_obj_2, reduction = "integrated.cca", dims = 1:30)
+
+# running (done running)
+merged_macaque_snRNAseq_obj_2 <- FindClusters(merged_macaque_snRNAseq_obj_2, resolution = 0.8)
+
+
+```
+
+Before, save rds after integrate cca completed (very long step)
+```{r}
+
+saveRDS(merged_macaque_snRNAseq_obj_2, file = "~/macaque_snRNAseq/wei_2022_integration/merged_macaque_snRNAseq_obj_2_boulting_wei_072425_integrated.cca_done.rds")
+
+```
+
+
+Request more memory
+```{r}
+plan("multicore", workers = 10) 
+options(future.globals.maxSize = 100 * 1024^3)  # 50 GB max memory
+
+```
+
+
+
+next steps! (didn't run yet) (running 7/25/25)
+Print integrated UMAP
+```{r}
+
+# run UMAP algorithm (still using one thread?)
+# 12:35:58 Searching Annoy index using 1 thread, search_k = 3000
+# took only a few minutes though!
+merged_macaque_snRNAseq_obj_2 <- RunUMAP(merged_macaque_snRNAseq_obj_2, dims = 1:30, reduction = "integrated.cca")
+
+# Visualization
+DimPlot(merged_macaque_snRNAseq_obj_2, reduction = "umap", group.by = c("dataset_type", "seurat_annotations"))
+
+
+```
+
+Forgot to change seurat_annotations to seurat_clusters
+```{r}
+
+# Visualization
+DimPlot(merged_macaque_snRNAseq_obj_2, reduction = "umap", group.by = c("dataset_type", "seurat_clusters"))
+# integrated clusters - 41
+
+```
+
+
+Visualize 2 datasets side by side
+screenshot and save. add to dropbox ppt
+```{r}
+
+DimPlot(merged_macaque_snRNAseq_obj_2, reduction = "umap", split.by = 'dataset_type')
+
+```
+
+
+View object metadata columns
+```{r}
+
+View(merged_macaque_snRNAseq_obj_2@meta.data)
+
+```
+
+
+the cell_label column is the wei et al annotations (67 cell labels so will be hard to see)
+```{r}
+
+DimPlot(wei_macfas5_snRNAseq_so, reduction = 'umap', group.by = 'cell_label')
+
+```
+
+
+plot by class (general categories of cell types) and subclass_1 (more specific). subclass_2 column just has gene names
+```{r}
+DimPlot(wei_macfas5_snRNAseq_so, reduction = 'umap', group.by = c("class", "subclass_1"))
+
+```
+
+
+Pause at 'identify conserved cell type markers' for now - likely need to make feature plots
+
+
+7/29/25 
+
+Save merged (and now integrated) seurat object. Ran UMAP algorithm and make UMAPs
+```{r}
+
+saveRDS(merged_macaque_snRNAseq_obj_2, file = "~/macaque_snRNAseq/wei_2022_integration/merged_macaque_snRNAseq_obj_2_boulting_wei_072925_runumap_done.rds")
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
