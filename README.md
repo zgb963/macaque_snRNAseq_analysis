@@ -27,6 +27,10 @@ enhancer changes and shown to regulate dendritic outgrowth in developing
 human neurons. We continue to study OSTN's regulatory evolution and its
 controlling transcription factors, SATB2 and MEF2C.
 
-**Goal:** Discover novel primate neuronal activity-regulated gene
-expression programs at cell-type resolution, in vivo. This repository
-contains the analysis pipeline examining activity-dependent gene programs in the primate brain.
+## Goals
+
+- [ ] Identify cell types in macaque V1
+- [ ] Identify activated vs. inactivated transcriptional profile for each neuronal cell type
+- [ ] Discover novel primate neuronal activity-regulated gene expression programs at cell-type resolution
+
+This repository contains the analysis pipeline examining activity-dependent gene programs in the primate brain.
