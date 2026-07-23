@@ -2,7 +2,7 @@
 
 Neuronal activity-dependent gene programs include modulators of neuronal activity and plasticity, with effects on behavior and learning. Mutations in activity dependent gene programs associated with neurological diseases such as autism, schizophrenia, bipolar, etc. Rodent models were essential for understanding neuronal activity-dependent gene expression, yet primates have evolved unique cellular and molecular features that may be critical for understanding human neurodevelopmental disorders. Lab previously discovered that activity dependent gene programs differ between rodents and primates, and found significant enrichment of autism-associated genes inside activity-regulated promoters of stem cell derived neurons. This suggests that autism risk variants may disrupt primate activity dependent pathways not visible in rodent studies.
 
-Lab generated snRNAseq data from primary visual cortex (V1) of Rhesus macaque (Macaca mulatta) after Monocular inactivation (MI).This procedure involves blinding macaques in one eye with a TTX injection (a neurotoxin that pauses neural activity). Then RNA situ hybridization (FISH) is done in primary visual cortex. Probing for specific activity-dependent genes resulted in alternating active and inactive ocular dominance columns. 24 hours after monocular inactivation, layer 4C neurons are probed for OSTN and LINC00473. Activity regulated transcripts OSTN & FSTL1 or OSTN & EGR1 are enriched in active columns [citation]
+Lab generated snRNAseq data from primary visual cortex (V1) of Rhesus macaque (Macaca mulatta) after Monocular inactivation (MI).This procedure involves blinding macaques in one eye with a TTX injection (a neurotoxin that pauses neural activity). Then RNA situ hybridization (FISH) is done in primary visual cortex. Probing for specific activity-dependent genes resulted in alternating active and inactive ocular dominance columns. 24 hours after monocular inactivation, layer 4C neurons are probed for OSTN and LINC00473. Activity regulated transcripts OSTN & FSTL1 or OSTN & EGR1 are enriched in active columns [Ataman et al. 2016](https://pubmed.ncbi.nlm.nih.gov/27830782/) 
 
 
 
@@ -116,17 +116,17 @@ This repository contains preliminary analysis pipelines examining activity-depen
    Created feature  UMAP & violin plots for marker genes of interest.
 
 5.  **Integration with similar snRNAseq dataset**
-    Integrate data with Wei et al 2022 [citation]
+    Integrate data with [Wei et al. 2022](https://www.nature.com/articles/s41467-022-34590-1)
 
 6.  **Cell type annotation**
     Finalize cell type identities for each cluster.
 
 7.  **Cell state discovery**
-    Identify cell states (active vs. inactive) within cell types. Software tested below
+    Identify cell states (active vs. inactive) within cell types. Software tested below.
     1.  **NEUROeSTIMator**
-        Deep learning neural network to identify cell activity [citation]
+        Deep learning neural network model to identify cell activity.
     2.  **Consensus NMF (cNMF)**
-        cNMF is a pipeline for inferring gene expression programs from scRNA-Seq
+        cNMF is a pipeline for inferring gene expression programs from scRNA-seq.
     3.  **Manual labeling**
         Manually label cells if have more than ~3 read mapped to activity dependent gene.
     
