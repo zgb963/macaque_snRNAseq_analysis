@@ -32,7 +32,7 @@ Gene expression counts in snRNA-seq represent the **number of RNA transcripts de
 
 ### Sample overview
 
-18 libraries/technical replicates sequenced across three animals from monocular inactivation (MI) experiments:
+18 libraries/biological replicates generated using 10x Genomics Single Cell 3' Kit (Dual Index) and sequenced using Illumina NextSeq 2000 across three animals from monocular inactivation (MI) experiments:
 
 - **8 replicates** from MI1
 - **2 replicates** from MI2
@@ -45,9 +45,8 @@ Gene expression counts in snRNA-seq represent the **number of RNA transcripts de
 | MI2 | Monocular inactivation, animal 2 |
 | MI3 | Monocular inactivation, animal 3 |
 
-> **Note:** Combined gene expression (GEX) library 3 FASTQ files were pooled from Run 6 and Run 9.
 
-### Library/sample manifest
+### Libraries Sequenced
 
 | Experiment | Sequencing Run | Sample ID |
 |---|---|---|
@@ -69,6 +68,8 @@ Gene expression counts in snRNA-seq represent the **number of RNA transcripts de
 | MI3 | 6 & 9 | 6-MI3_V1_231103 |
 | MI3 | 6 & 9 | 7-MI3_V1_231103 |
 | MI3 | 6 & 9 | 8-MI3_V1_231103 |
+
+> **Note:** Combined gene expression (GEX) library 3 FASTQ files were pooled from Run 6 and Run 9.
 
 ---
 
