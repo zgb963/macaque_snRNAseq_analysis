@@ -122,8 +122,14 @@ This repository contains preliminary analysis pipelines examining activity-depen
     Finalize cell type identities for each cluster.
 
 7.  **Cell state discovery**
-    Identified cell states (active vs. inactive) within cell types.
-
+    Identify cell states (active vs. inactive) within cell types. Software tested below
+    1.  **NEUROeSTIMator**
+        Deep learning neural network to identify cell activity [citation]
+    2.  **Consensus NMF (cNMF)**
+        cNMF is a pipeline for inferring gene expression programs from scRNA-Seq
+    3.  **Manual labeling**
+        Manually label cells if have more than ~3 read mapped to activity dependent gene.
+    
 8.  **Cross-dataset comparison**
     Compared results to other published macaque snRNA-seq datasets.
 
