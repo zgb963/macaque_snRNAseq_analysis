@@ -134,16 +134,44 @@ This repository contains preliminary analysis pipelines examining activity-depen
     Compared results to other published macaque snRNA-seq datasets.
 
 
+---
 
+## Results
 
-
-
-
-
-
-
-
-
-
+> 🔬 Analysis ongoing
 
 ---
+
+## Helpful Links & References
+
+- [Chromium Next GEM Single Cell 3ʹ Reagent Kits v3.1 (Dual Index)](https://cdn.10xgenomics.com/image/upload/v1668017706/support-documents/CG000315_ChromiumNextGEMSingleCell3-_GeneExpression_v3.1_DualIndex__RevE.pdf)
+- [Cell Ranger count Pipeline CLI](https://www.10xgenomics.com/support/software/cell-ranger/latest/analysis/running-pipelines/cr-gex-count)
+- [SoupX](https://pubmed.ncbi.nlm.nih.gov/33367645/)
+- [MiQC](https://pmc.ncbi.nlm.nih.gov/articles/PMC8415599/)
+- [DropletQC](https://pubmed.ncbi.nlm.nih.gov/34857027/)
+- [DoubletFinder](https://pubmed.ncbi.nlm.nih.gov/30954475/)
+- [Doublet Detection Benchmarking](https://pubmed.ncbi.nlm.nih.gov/33338399/)
+- [Seurat Clustering](https://satijalab.org/seurat/articles/pbmc3k_tutorial)
+- [Merge Seurat Objects](https://satijalab.org/seurat/articles/essential_commands#subsetting-and-merging)
+- [Mapping and annotating query datasets](https://satijalab.org/seurat/articles/integration_mapping.html)
+- [NEUROeSTIMator](https://www.nature.com/articles/s41467-023-44503-5)
+- [cnmf](https://www.nature.com/articles/s41467-023-44503-5)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
