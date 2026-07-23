@@ -81,3 +81,63 @@ Gene expression counts in snRNA-seq represent the **number of RNA transcripts de
 - [ ] Discover novel primate neuronal activity-regulated gene expression programs at cell-type resolution
 
 This repository contains preliminary analysis pipelines examining activity-dependent gene programs in the primate brain.
+
+---
+
+## Methods
+## Methods
+
+1. **Alignment & quantification**
+   Ran Cell Ranger `count` using ENSEMBL Rhemac10 GTF (no chr) `Macaca_mulatta.Mmul_10.113.gtf`
+    & FASTA (unmasked) `Macaca_mulatta.Mmul_10.dna.toplevel.fa.gz`
+    
+2. **Downstream analysis in R**
+   Performed downstream processing and QC in R (note: some steps are redundant with Cell Ranger's built-in filtering).
+
+   1. **Ambient RNA correction — SoupX**
+      Identified and corrected for ambient RNA contamination.
+
+   2. **Damaged nuclei filtering — MiQC**
+      Identified and removed damaged/low-quality nuclei.
+
+   3. **Empty droplet filtering — DropletQC**
+      Identified and removed empty droplets.
+
+   4. **Standard Seurat Analysis**
+      Analyzed snRNA-seq data (normalization, dimensionality reduction, clustering).
+
+   5. **Doublet detection — DoubletFinder**
+      Identified and removed doublets.
+
+3. **Combine Samples**
+   Combined all libraries into a single Seurat object and generated combined UMAP.
+
+4. **Feature visualization**
+   Created feature  UMAP & violin plots for marker genes of interest.
+
+5.  **Integration with similar snRNAseq dataset**
+    Integrate data with Wei et al 2022 [citation]
+
+6.  **Cell type annotation**
+    Finalize cell type identities for each cluster.
+
+7.  **Cell state discovery**
+    Identified cell states (active vs. inactive) within cell types.
+
+8.  **Cross-dataset comparison**
+    Compared results to other published macaque snRNA-seq datasets.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+---
